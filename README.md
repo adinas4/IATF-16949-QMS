@@ -1,6 +1,26 @@
 # IATF 16949 Document Control System
 
-Aplikasi React untuk kontrol dokumen IATF 16949: dashboard, daftar dokumen, detail histori revisi, upload simulasi, workflow approval, audit log, dan mapping klausul.
+Aplikasi React untuk kontrol dokumen IATF 16949: dashboard, daftar dokumen, detail histori revisi, upload simulasi, workflow approval, audit log, mapping klausul, coverage dashboard, gap analyzer, compliance matrix, CSR indicator, dan report export.
+
+## Modul Clause Coverage
+
+- Clause tree interaktif dengan expand/collapse dan breadcrumb.
+- Drag-and-drop mapping dokumen ke klausul.
+- Coverage dashboard dengan indikator hijau/kuning/merah.
+- Gap analyzer dengan rekomendasi dokumen per klausul.
+- Compliance matrix dengan quick filter: All, Covered, Partial, Uncovered, CSR.
+- Search klausul dengan autocomplete.
+- Report generator export CSV/JSON/Excel dan PDF via browser print.
+
+Catatan lisensi: data klausul di aplikasi memakai kode, judul/parafrase, metadata, dan rekomendasi dokumen. Teks resmi standar tidak disalin ke repo.
+
+## Artefak Implementasi
+
+- Schema dan SQL seed: `docs/database-schema-and-seed.sql`
+- API documentation: `docs/api.md`
+- Step-by-step implementasi: `docs/implementation-guide.md`
+- Testing strategy 100% coverage: `docs/testing-strategy.md`
+- Deployment guide: `docs/deployment-guide.md`
 
 ## Jalankan Lokal
 
