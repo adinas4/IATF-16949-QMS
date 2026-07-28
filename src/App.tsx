@@ -9,16 +9,7 @@ import {
   UploadCloud, File, CheckCircle, AlertCircle, Calendar, ArrowRight, LayoutGrid, CheckSquare
 } from 'lucide-react';
 import { db, isFirebaseConfigured } from './firebase';
-
-const IATF_CLAUSES = [
-  { code: '4.1', name: 'Memahami Organisasi & Konteksnya' },
-  { code: '5.1', name: 'Kepemimpinan dan Komitmen' },
-  { code: '6.1', name: 'Tindakan Menangani Risiko & Peluang' },
-  { code: '7.5', name: 'Informasi Terdokumentasi (Documented Information)' },
-  { code: '8.5', name: 'Produksi dan Penyediaan Jasa' },
-  { code: '9.2', name: 'Audit Internal (System & Layered Process Audit)' },
-  { code: '10.2', name: 'Ketidaksesuaian dan Tindakan Korektif (8D Report)' }
-];
+import { ClauseComplianceWorkspace } from './components/compliance/ClauseComplianceWorkspace';
 
 const DOC_LEVELS = [
   { id: 'L1', code: 'L1', name: 'Level 1: Manual Mutu', color: 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-300' },
@@ -558,6 +549,57 @@ function DocumentControlApp() {
     setSelectedDoc(updatedDoc);
 
     showToast(`Status Dokumen ${targetDoc?.docNumber} diperbarui ke ${newStatus}!`, 'success');
+  };
+
+  const persistDocumentClauseUpdate = async (docId, nextClauses, actionLabel) => {
+    const targetDoc = documents.find(d => d.id === docId);
+    if (!targetDoc) return;
+
+    const updatedDoc = { ...targetDoc, clauses: nextClauses };
+    const newLog = {
+      id: `LOG-${Math.floor(1000 + Math.random() * 9000)}`,
+      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
+      user: `${currentRole}`,
+      action: actionLabel,
+      docNum: targetDoc.docNumber,
+      details: `Mapping klausul diperbarui: ${nextClauses.join(', ')}`
+    };
+
+    try {
+      if (useFirebase && db) {
+        await Promise.all([
+          updateDoc(firestoreDoc(db, COLLECTIONS.documents, docId), { clauses: nextClauses }),
+          setDoc(firestoreDoc(db, COLLECTIONS.auditLogs, newLog.id), newLog)
+        ]);
+      } else {
+        setDocuments(prevDocs => prevDocs.map(d => d.id === docId ? updatedDoc : d));
+        setAuditLogs(prev => [newLog, ...prev]);
+      }
+    } catch (error) {
+      setUseFirebase(false);
+      setDatabaseStatus('Firebase write gagal, mode lokal');
+      setDatabaseError(error?.message || 'Gagal memperbarui mapping klausul');
+      setDocuments(prevDocs => prevDocs.map(d => d.id === docId ? updatedDoc : d));
+      setAuditLogs(prev => [newLog, ...prev]);
+    }
+
+    if (selectedDoc?.id === docId) setSelectedDoc(updatedDoc);
+  };
+
+  const handleAssignClause = async (docId, clauseCode) => {
+    const targetDoc = documents.find(d => d.id === docId);
+    if (!targetDoc || targetDoc.clauses.includes(clauseCode)) return;
+    const nextClauses = [...targetDoc.clauses, clauseCode].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    await persistDocumentClauseUpdate(docId, nextClauses, 'MAP_CLAUSE');
+    showToast(`Klausul ${clauseCode} dimapping ke ${targetDoc.docNumber}.`, 'success');
+  };
+
+  const handleRemoveClause = async (docId, clauseCode) => {
+    const targetDoc = documents.find(d => d.id === docId);
+    if (!targetDoc) return;
+    const nextClauses = targetDoc.clauses.filter(code => code !== clauseCode);
+    await persistDocumentClauseUpdate(docId, nextClauses, 'UNMAP_CLAUSE');
+    showToast(`Mapping klausul ${clauseCode} dihapus dari ${targetDoc.docNumber}.`, 'info');
   };
 
   const handleDownloadWatermarked = (doc) => {
@@ -1550,57 +1592,11 @@ function DocumentControlApp() {
 
         {/* 6. MAPPING KLAUSUL IATF & CORE TOOLS */}
         {activeTab === 'clauses' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className={`p-6 rounded-2xl border ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} shadow-sm`}>
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h3 className="font-bold text-base">Matriks Pemetaan Klausul IATF 16949:2016</h3>
-                  <p className="text-xs text-slate-500">Kesesuaian dokumen terdaftar dengan klausul standar (4.1 - 10.3.1)</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {IATF_CLAUSES.map(clause => {
-                  const mappedDocs = documents.filter(d => d.clauses.some(c => c.startsWith(clause.code)));
-                  return (
-                    <div 
-                      key={clause.code} 
-                      className={`p-4 rounded-xl border transition ${
-                        mappedDocs.length > 0 
-                          ? 'border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/30 dark:bg-indigo-950/20' 
-                          : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-indigo-600 text-white">
-                          Klausul {clause.code}
-                        </span>
-                        <span className="text-xs text-slate-500 font-medium">
-                          {mappedDocs.length} Dokumen
-                        </span>
-                      </div>
-                      <h4 className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-3 min-h-[32px]">
-                        {clause.name}
-                      </h4>
-
-                      <div className="space-y-1.5 pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                        {mappedDocs.map(d => (
-                          <button
-                            key={d.id}
-                            onClick={() => { setSelectedDoc(d); setActiveTab('detail'); }}
-                            className="w-full text-left p-1.5 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-[11px] font-mono text-indigo-600 dark:text-indigo-400 flex items-center justify-between"
-                          >
-                            <span className="truncate">{d.docNumber}</span>
-                            <span className="text-[9px] px-1 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{d.status}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <ClauseComplianceWorkspace
+            documents={documents}
+            onAssignClause={handleAssignClause}
+            onRemoveClause={handleRemoveClause}
+          />
         )}
 
         {/* 7. WIREFRAME & DESAIN LAYOUT DESKRIPSI */}
