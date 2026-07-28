@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { collection, doc as firestoreDoc, getDocs, onSnapshot, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { 
   FileText, CheckCircle2, Clock, AlertTriangle, Search, Filter, Plus, 
   Download, ShieldCheck, Layers, Eye, Edit3, Trash2, UserCheck, RefreshCw, 
@@ -7,6 +8,7 @@ import {
   Check, FileSpreadsheet, Activity, Building, ShieldAlert, Cpu, ArrowUpRight,
   UploadCloud, File, CheckCircle, AlertCircle, Calendar, ArrowRight, LayoutGrid, CheckSquare
 } from 'lucide-react';
+import { db, isFirebaseConfigured } from './firebase';
 
 const IATF_CLAUSES = [
   { code: '4.1', name: 'Memahami Organisasi & Konteksnya' },
@@ -171,6 +173,11 @@ const STORAGE_KEYS = {
   role: 'iatf-doc-control:role'
 };
 
+const COLLECTIONS = {
+  documents: 'documents',
+  auditLogs: 'auditLogs'
+};
+
 const loadStoredValue = (key, fallback) => {
   try {
     const raw = window.localStorage.getItem(key);
@@ -220,6 +227,9 @@ function DocumentControlApp() {
   const [auditLogs, setAuditLogs] = useState(() => loadStoredValue(STORAGE_KEYS.auditLogs, INITIAL_AUDIT_LOGS));
   const [activeTab, setActiveTab] = useState('dashboard');
   const [darkMode, setDarkMode] = useState(() => loadStoredValue(STORAGE_KEYS.darkMode, false));
+  const [useFirebase, setUseFirebase] = useState(isFirebaseConfigured);
+  const [databaseStatus, setDatabaseStatus] = useState(isFirebaseConfigured ? 'Menghubungkan Firestore...' : 'Mode lokal');
+  const [databaseError, setDatabaseError] = useState(null);
   
   // Current User Role Simulation
   const [currentRole, setCurrentRole] = useState(() => loadStoredValue(STORAGE_KEYS.role, 'QA_MANAGER'));
@@ -257,12 +267,16 @@ function DocumentControlApp() {
   });
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.documents, JSON.stringify(documents));
-  }, [documents]);
+    if (!useFirebase) {
+      window.localStorage.setItem(STORAGE_KEYS.documents, JSON.stringify(documents));
+    }
+  }, [documents, useFirebase]);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEYS.auditLogs, JSON.stringify(auditLogs));
-  }, [auditLogs]);
+    if (!useFirebase) {
+      window.localStorage.setItem(STORAGE_KEYS.auditLogs, JSON.stringify(auditLogs));
+    }
+  }, [auditLogs, useFirebase]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEYS.darkMode, JSON.stringify(darkMode));
@@ -276,6 +290,85 @@ function DocumentControlApp() {
   useEffect(() => {
     setSelectedDoc(prev => documents.find(doc => doc.id === prev?.id) || documents[0] || null);
   }, [documents]);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured || !db) {
+      setUseFirebase(false);
+      setDatabaseStatus('Mode lokal');
+      return undefined;
+    }
+
+    let unsubscribeDocuments = () => {};
+    let unsubscribeAuditLogs = () => {};
+    let cancelled = false;
+
+    const connectFirestore = async () => {
+      try {
+        setDatabaseStatus('Menyiapkan Firestore...');
+        const documentsRef = collection(db, COLLECTIONS.documents);
+        const auditLogsRef = collection(db, COLLECTIONS.auditLogs);
+        const existingDocuments = await getDocs(documentsRef);
+
+        if (existingDocuments.empty) {
+          const batch = writeBatch(db);
+          INITIAL_DOCUMENTS.forEach(item => {
+            batch.set(firestoreDoc(documentsRef, item.id), item);
+          });
+          INITIAL_AUDIT_LOGS.forEach(item => {
+            batch.set(firestoreDoc(auditLogsRef, item.id), item);
+          });
+          await batch.commit();
+        }
+
+        if (cancelled) return;
+
+        unsubscribeDocuments = onSnapshot(
+          documentsRef,
+          snapshot => {
+            const remoteDocuments = snapshot.docs
+              .map(item => ({ id: item.id, ...item.data() }))
+              .sort((a, b) => String(b.id).localeCompare(String(a.id)));
+            setDocuments(remoteDocuments.length ? remoteDocuments : INITIAL_DOCUMENTS);
+            setUseFirebase(true);
+            setDatabaseStatus('Tersinkron ke Firebase');
+            setDatabaseError(null);
+          },
+          error => {
+            setUseFirebase(false);
+            setDatabaseStatus('Firebase error, mode lokal');
+            setDatabaseError(error.message);
+          },
+        );
+
+        unsubscribeAuditLogs = onSnapshot(
+          auditLogsRef,
+          snapshot => {
+            const remoteLogs = snapshot.docs
+              .map(item => ({ id: item.id, ...item.data() }))
+              .sort((a, b) => String(b.timestamp).localeCompare(String(a.timestamp)));
+            setAuditLogs(remoteLogs.length ? remoteLogs : INITIAL_AUDIT_LOGS);
+          },
+          error => {
+            setUseFirebase(false);
+            setDatabaseStatus('Firebase error, mode lokal');
+            setDatabaseError(error.message);
+          },
+        );
+      } catch (error) {
+        setUseFirebase(false);
+        setDatabaseStatus('Firebase tidak tersedia, mode lokal');
+        setDatabaseError(error?.message || 'Gagal menghubungkan Firestore');
+      }
+    };
+
+    connectFirestore();
+
+    return () => {
+      cancelled = true;
+      unsubscribeDocuments();
+      unsubscribeAuditLogs();
+    };
+  }, []);
 
   // Auto notification toast banner duration handler
   const showToast = (message, type = 'info') => {
@@ -353,7 +446,7 @@ function DocumentControlApp() {
     return { total, approved, review, draft, obsolete, expiring7: 1, stale6Months: 1 };
   }, [documents]);
 
-  const handleCreateDocument = (e) => {
+  const handleCreateDocument = async (e) => {
     e.preventDefault();
     const docNum = generateDocNumber(newDocForm.department, newDocForm.level);
     const newEntry = {
@@ -381,7 +474,6 @@ function DocumentControlApp() {
       comments: []
     };
 
-    setDocuments([newEntry, ...documents]);
     setSelectedDoc(newEntry);
     
     // Add Audit Log
@@ -393,7 +485,24 @@ function DocumentControlApp() {
       docNum: docNum,
       details: `Upload dokumen baru dalam status Draft: ${newDocForm.title}`
     };
-    setAuditLogs([newLog, ...auditLogs]);
+
+    try {
+      if (useFirebase && db) {
+        await Promise.all([
+          setDoc(firestoreDoc(db, COLLECTIONS.documents, newEntry.id), newEntry),
+          setDoc(firestoreDoc(db, COLLECTIONS.auditLogs, newLog.id), newLog)
+        ]);
+      } else {
+        setDocuments(prev => [newEntry, ...prev]);
+        setAuditLogs(prev => [newLog, ...prev]);
+      }
+    } catch (error) {
+      setUseFirebase(false);
+      setDatabaseStatus('Firebase write gagal, mode lokal');
+      setDatabaseError(error?.message || 'Gagal menyimpan dokumen ke Firestore');
+      setDocuments(prev => [newEntry, ...prev]);
+      setAuditLogs(prev => [newLog, ...prev]);
+    }
 
     setUploadedFile(null);
     setUploadProgress(0);
@@ -406,19 +515,15 @@ function DocumentControlApp() {
     showToast(`Dokumen ${docNum} berhasil diunggah dan masuk ke alur Draft!`, 'success');
   };
 
-  const handleStatusChange = (docId, newStatus, logMessage) => {
-    setDocuments(prevDocs => prevDocs.map(d => {
-      if (d.id === docId) {
-        let updatedVer = d.version;
-        if (newStatus === 'Approved') {
-          updatedVer = d.version.replace(' (Draft)', '');
-        }
-        return { ...d, status: newStatus, version: updatedVer };
-      }
-      return d;
-    }));
-
+  const handleStatusChange = async (docId, newStatus, logMessage) => {
     const targetDoc = documents.find(d => d.id === docId);
+    if (!targetDoc) return;
+
+    const updatedDoc = {
+      ...targetDoc,
+      status: newStatus,
+      version: newStatus === 'Approved' ? targetDoc.version.replace(' (Draft)', '') : targetDoc.version
+    };
     
     const newLog = {
       id: `LOG-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -428,11 +533,29 @@ function DocumentControlApp() {
       docNum: targetDoc?.docNumber || docId,
       details: logMessage || `Status dokumen diubah menjadi ${newStatus}`
     };
-    setAuditLogs([newLog, ...auditLogs]);
 
-    if (selectedDoc && selectedDoc.id === docId) {
-      setSelectedDoc(prev => ({ ...prev, status: newStatus }));
+    try {
+      if (useFirebase && db) {
+        await Promise.all([
+          updateDoc(firestoreDoc(db, COLLECTIONS.documents, docId), {
+            status: updatedDoc.status,
+            version: updatedDoc.version
+          }),
+          setDoc(firestoreDoc(db, COLLECTIONS.auditLogs, newLog.id), newLog)
+        ]);
+      } else {
+        setDocuments(prevDocs => prevDocs.map(d => d.id === docId ? updatedDoc : d));
+        setAuditLogs(prev => [newLog, ...prev]);
+      }
+    } catch (error) {
+      setUseFirebase(false);
+      setDatabaseStatus('Firebase write gagal, mode lokal');
+      setDatabaseError(error?.message || 'Gagal memperbarui dokumen di Firestore');
+      setDocuments(prevDocs => prevDocs.map(d => d.id === docId ? updatedDoc : d));
+      setAuditLogs(prev => [newLog, ...prev]);
     }
+
+    setSelectedDoc(updatedDoc);
 
     showToast(`Status Dokumen ${targetDoc?.docNumber} diperbarui ke ${newStatus}!`, 'success');
   };
@@ -494,6 +617,17 @@ function DocumentControlApp() {
                   </h1>
                   <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono font-medium border border-slate-200 dark:border-slate-700">
                     Klausul 7.5
+                  </span>
+                  <span
+                    className={`hidden lg:inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-mono font-medium border ${
+                      useFirebase
+                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                        : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                    }`}
+                    title={databaseError || databaseStatus}
+                  >
+                    <Database className="w-3 h-3" />
+                    {databaseStatus}
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">Automotive Quality Document Control System</p>
