@@ -1,0 +1,28 @@
+{
+  "name": "iatf-16949-qms",
+  "version": "1.0.0",
+  "description": "IATF 16949 document control application",
+  "private": true,
+  "main": "src/main.tsx",
+  "scripts": {
+    "dev": "vite",
+    "start": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@vitejs/plugin-react": "^6.0.4",
+    "autoprefixer": "^10.5.4",
+    "lucide-react": "^1.27.0",
+    "postcss": "^8.5.23",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.5"
+  }
+}
