@@ -74,3 +74,14 @@ npm run preview
 - Jika Firebase belum dikonfigurasi atau koneksi gagal, aplikasi fallback ke `localStorage` browser.
 - Upload file saat ini menyimpan metadata file, bukan file asli.
 - Untuk produksi multi-user perlu backend storage, autentikasi, role permission, dan database.
+
+## Audit Supplier dan Identitas Pengguna
+
+- Masuk memakai nama lengkap dan pilihan departemen. Sesi disimpan di sessionStorage; tombol Keluar menghapus sesi. Ini identifikasi tanpa password, bukan autentikasi atau pembatasan akses server.
+- Menu Audit Supplier menyediakan checklist awal untuk sembilan departemen. Auditor dan departemen mengikuti identitas saat masuk; draft hanya dapat diedit melalui UI oleh identitas yang sama. Semua pengguna dapat melihat hasil.
+- Buat audit, isi supplier/tanggal, nilai 0-4 atau N/A, bukti, dan tindakan koreksi. Draft dapat dilanjutkan setelah masuk kembali dengan identitas yang sama.
+- Finalisasi mensyaratkan semua item terisi, bukti/alasan N/A, minimal satu nilai berlaku, dan tindakan koreksi untuk nilai 0-2. Audit final tidak dapat diedit melalui UI.
+- Skor dibulatkan ke bilangan bulat: jumlah nilai / (4 x jumlah item berlaku) x 100. A: minimal 85; B: minimal 70; C: di bawah 70. Ini kriteria internal, bukan hasil sertifikasi.
+- Rekap supplier memakai rata-rata skor final terbaru per departemen berdasarkan tanggal audit, kemudian waktu finalisasi. Departemen yang belum mengaudit tidak dihitung. Filter departemen juga berlaku untuk rekap.
+- Audit supplier disimpan khusus di localStorage (`iatf:supplier-audits:v1`), belum disinkronkan ke Firestore atau perangkat lain. Jangan hapus data browser jika masih diperlukan.
+- Uji logika skor dan finalisasi dengan Node.js 24: `node --test tests/supplier-audit.test.mjs`.

@@ -11,6 +11,9 @@ import {
 import { db, isFirebaseConfigured } from './firebase';
 import { ClauseComplianceWorkspace } from './components/compliance/ClauseComplianceWorkspace';
 
+import { Login, readIdentity } from './components/supplier/Login';
+import { SupplierAudit } from './components/supplier/SupplierAudit';
+
 const DOC_LEVELS = [
   { id: 'L1', code: 'L1', name: 'Level 1: Manual Mutu', color: 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300 border border-purple-300' },
   { id: 'L2', code: 'L2', name: 'Level 2: Prosedur Terintegrasi', color: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300 border border-blue-300' },
@@ -213,7 +216,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-function DocumentControlApp() {
+function DocumentControlApp({ identity, onLogout }) {
   const [documents, setDocuments] = useState(() => loadStoredValue(STORAGE_KEYS.documents, INITIAL_DOCUMENTS));
   const [auditLogs, setAuditLogs] = useState(() => loadStoredValue(STORAGE_KEYS.auditLogs, INITIAL_AUDIT_LOGS));
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -676,6 +679,7 @@ function DocumentControlApp() {
               </div>
             </div>
 
+            <div className="flex items-center gap-2 text-xs"><span>{identity.name}<br />{identity.department}</span><button className="border rounded-lg px-3 py-2" onClick={onLogout}>Keluar</button></div>
             {/* Role Switcher & Dark Mode Toggle */}
             <div className="flex items-center gap-3">
               <div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700">
@@ -727,6 +731,7 @@ function DocumentControlApp() {
               { id: 'upload', label: '4. Upload Drag & Drop', icon: UploadCloud },
               { id: 'approval', label: '5. Workflow Approval', icon: UserCheck, count: stats.review },
               { id: 'clauses', label: '6. Mapping Klausul', icon: Layers },
+              { id: 'supplier', label: 'Audit Supplier', icon: Building },
               { id: 'wireframe', label: '7. Wireframe Layout', icon: LayoutGrid }
             ].map(tab => {
               const Icon = tab.icon;
@@ -758,6 +763,7 @@ function DocumentControlApp() {
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
+        <div hidden={activeTab !== 'supplier'}><SupplierAudit identity={identity} /></div>
         {/* 1. HALAMAN DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div className="space-y-8 animate-fade-in">
@@ -1663,9 +1669,15 @@ function DocumentControlApp() {
 }
 
 export default function App() {
+  const [identity, setIdentity] = useState(readIdentity);
+  const logout = () => {
+    if (!window.confirm('Keluar dari sesi? Pastikan draft audit sudah disimpan.')) return;
+    sessionStorage.removeItem('iatf:identity');
+    setIdentity(null);
+  };
   return (
     <ErrorBoundary>
-      <DocumentControlApp />
+      <>{identity ? <DocumentControlApp identity={identity} onLogout={logout} /> : <Login onLogin={setIdentity} />}</>
     </ErrorBoundary>
   );
 }
