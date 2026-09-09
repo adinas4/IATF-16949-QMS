@@ -647,79 +647,32 @@ function DocumentControlApp({ identity, onLogout }) {
 
       {/* Top Header / Brand Nav */}
       <header className={`sticky top-0 z-30 border-b backdrop-blur-md ${darkMode ? 'bg-slate-900/90 border-slate-800' : 'bg-white/90 border-slate-200'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            
-            {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-tr from-blue-600 to-indigo-600 text-white p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
-                <ShieldCheck className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="font-bold text-lg tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                    IATF 16949 QMS
-                  </h1>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono font-medium border border-slate-200 dark:border-slate-700">
-                    Klausul 7.5
-                  </span>
-                  <span
-                    className={`hidden lg:inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-mono font-medium border ${
-                      useFirebase
-                        ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                        : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                    }`}
-                    title={databaseError || databaseStatus}
-                  >
-                    <Database className="w-3 h-3" />
-                    {databaseStatus}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 hidden sm:block">Automotive Quality Document Control System</p>
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between min-h-16 py-2 gap-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="shrink-0 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white p-2.5 rounded-xl shadow-lg shadow-indigo-500/20"><ShieldCheck className="w-6 h-6" /></div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2"><h1 className="whitespace-nowrap font-bold text-lg tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">IATF 16949 QMS</h1><span className="hidden sm:inline-flex text-xs px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono font-medium border border-slate-200 dark:border-slate-700">Klausul 7.5</span></div>
+                <p className="hidden sm:block truncate text-xs text-slate-500 dark:text-slate-400">Automotive Quality Document Control System</p>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 text-xs"><span>{identity.name}<br />{identity.department}{identity.companyName && <> · {identity.companyName}</>}</span><button className="border rounded-lg px-3 py-2" onClick={onLogout}>Keluar</button></div>
-            {/* Role Switcher & Dark Mode Toggle */}
-            <div className="flex items-center gap-3">
-              <div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700">
-                <span className="text-slate-500 px-2">Role:</span>
-                {[
-                  { id: 'ADMIN', name: 'Admin' },
-                  { id: 'QA_MANAGER', name: 'QA Manager' },
-                  { id: 'DOC_CONTROLLER', name: 'Doc Controller' },
-                  { id: 'AUDITOR', name: 'Auditor' }
-                ].map(r => (
-                  <button
-                    key={r.id}
-                    onClick={() => setCurrentRole(r.id)}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      currentRole === r.id 
-                        ? 'bg-indigo-600 text-white shadow-sm' 
-                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {r.name}
-                  </button>
-                ))}
+            <div className="flex shrink-0 items-center gap-2">
+              <div className="hidden lg:flex items-center gap-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-xs">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-100 dark:bg-indigo-950 font-bold text-indigo-700 dark:text-indigo-300">{identity.name.trim().charAt(0).toUpperCase()}</div>
+                <div className="max-w-44 leading-tight"><p className="truncate font-semibold">{identity.name}</p><p className="truncate text-slate-500 dark:text-slate-400">{identity.department}{identity.companyName && <> · {identity.companyName}</>}</p></div>
               </div>
-
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
-                title="Toggle Theme"
-              >
-                {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-              </button>
-
-              <button
-                onClick={() => setActiveTab('upload')}
-                className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-md shadow-indigo-600/20 transition"
-              >
-                <UploadCloud className="w-4 h-4" />
-                <span className="hidden sm:inline">Upload Dokumen</span>
-              </button>
+              <button onClick={() => setDarkMode(!darkMode)} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition" title="Ubah tema">{darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
+              <button onClick={() => setActiveTab('upload')} className="flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-md shadow-indigo-600/20 transition"><UploadCloud className="w-4 h-4" /><span className="hidden sm:inline">Upload Dokumen</span></button>
+              <button className="rounded-xl border border-slate-300 dark:border-slate-700 px-3 py-2 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800" onClick={onLogout}>Keluar</button>
             </div>
+          </div>
+
+          <div className="flex items-center gap-3 overflow-x-auto border-t border-slate-100 dark:border-slate-800/80 py-2 text-xs scrollbar-none">
+            <span className="shrink-0 font-semibold text-slate-500">Mode akses</span>
+            <div className="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700">
+              {[{ id: 'ADMIN', name: 'Admin' }, { id: 'QA_MANAGER', name: 'QA Manager' }, { id: 'DOC_CONTROLLER', name: 'Doc Controller' }, { id: 'AUDITOR', name: 'Auditor' }].map(r => <button key={r.id} onClick={() => setCurrentRole(r.id)} className={`whitespace-nowrap px-3 py-1.5 rounded-md transition-all ${currentRole === r.id ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>{r.name}</button>)}
+            </div>
+            <span className={`ml-auto hidden md:inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 font-mono ${useFirebase ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800' : 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'}`} title={databaseError || databaseStatus}><Database className="w-3 h-3" />{databaseStatus}</span>
           </div>
 
           {/* Navigation Tabs Bar */}
