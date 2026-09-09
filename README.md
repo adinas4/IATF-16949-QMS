@@ -78,7 +78,7 @@ npm run preview
 ## Audit Supplier dan Identitas Pengguna
 
 - Masuk memakai nama lengkap dan pilihan departemen. Sesi disimpan di sessionStorage; tombol Keluar menghapus sesi. Ini identifikasi tanpa password, bukan autentikasi atau pembatasan akses server.
-- Menu Audit Supplier menyediakan checklist awal untuk sembilan departemen. Auditor dan departemen mengikuti identitas saat masuk; draft hanya dapat diedit melalui UI oleh identitas yang sama. Semua pengguna dapat melihat hasil.
+- Menu Audit Supplier menyediakan checklist dari form audit supplier certified untuk 11 departemen. Auditor dan departemen mengikuti identitas saat masuk; draft hanya dapat diedit melalui UI oleh identitas yang sama. Semua pengguna dapat melihat hasil.
 - Buat audit, isi supplier/tanggal, nilai 0-4 atau N/A, bukti, dan tindakan koreksi. Draft dapat dilanjutkan setelah masuk kembali dengan identitas yang sama.
 - Finalisasi mensyaratkan semua item terisi, bukti/alasan N/A, minimal satu nilai berlaku, dan tindakan koreksi untuk nilai 0-2. Audit final tidak dapat diedit melalui UI.
 - Skor dibulatkan ke bilangan bulat: jumlah nilai / (4 x jumlah item berlaku) x 100. A: minimal 85; B: minimal 70; C: di bawah 70. Ini kriteria internal, bukan hasil sertifikasi.
@@ -88,4 +88,4 @@ npm run preview
 
 ### Form checklist departemen
 
-Menu Audit Supplier menampilkan pratinjau 6 pertanyaan dan panduan bukti untuk setiap departemen (54 pertanyaan total). Audit baru memakai checklist departemen pengguna. Form mencatat lokasi, produk/proses, dan PIC supplier; temuan bernilai 0-2 memerlukan tindakan koreksi, PIC, dan target penyelesaian. Audit lama tetap memakai snapshot checklist aslinya. Progres penilaian menunjukkan jumlah item yang sudah diberi nilai, sementara finalisasi juga memvalidasi bukti dan kelengkapan form.
+Menu Audit Supplier memuat 105 pertanyaan dari 15 area audit pada `Check and Finding Sheet Audit Supplier PT MRP Certified`, lalu membagikannya ke 11 departemen terkait. Setiap item menyimpan bukti objektif yang diharapkan, nomor dokumen atau referensi observasi, bukti aktual, uraian temuan, kategori hasil (Conformity, Observation, OFI, Minor, atau Major), nilai, tindakan koreksi, PIC, dan target penyelesaian. Audit baru memakai checklist departemen pengguna; audit lama tetap memakai snapshot checklist aslinya.

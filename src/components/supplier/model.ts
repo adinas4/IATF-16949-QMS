@@ -1,5 +1,8 @@
-export type ChecklistItem = { question: string; guidance: string };
-export const CHECKLISTS: Record<string, ChecklistItem[]> = {
+import { CERTIFIED_SUPPLIER_CHECKLIST } from './certifiedChecklist.ts';
+
+export type FindingCategory = '' | 'CONFORMITY' | 'OBSERVATION' | 'OFI' | 'MINOR' | 'MAJOR';
+export type ChecklistItem = { id?: string; category?: string; question: string; guidance: string };
+const LEGACY_CHECKLISTS: Record<string, ChecklistItem[]> = {
   'Quality Assurance': [
     { question: 'Apakah dokumen mutu yang digunakan merupakan revisi terkini?', guidance: 'Periksa master list, persetujuan revisi, dan dokumen di area kerja.' },
     { question: 'Apakah audit internal dilaksanakan sesuai jadwal?', guidance: 'Bandingkan program audit dengan laporan dan kompetensi auditor.' },
@@ -73,9 +76,12 @@ export const CHECKLISTS: Record<string, ChecklistItem[]> = {
     { question: 'Apakah rencana kontinjensi diuji dan diperbarui?', guidance: 'Periksa skenario gangguan, simulasi, kontak darurat, dan hasil evaluasi.' },
   ],
 };
+// The certified supplier workbook is the controlled source for new audits.
+// Keep the earlier templates available so saved audit snapshots remain readable.
+export const CHECKLISTS: Record<string, ChecklistItem[]> = CERTIFIED_SUPPLIER_CHECKLIST;
 export const DEPARTMENTS = Object.keys(CHECKLISTS);
 export type Identity = { name: string; department: string };
-export type Answer = { question: string; score: string; evidence: string; action: string; guidance?: string; pic?: string; dueDate?: string };
+export type Answer = { id?: string; category?: string; question: string; score: string; evidence: string; finding?: string; action: string; guidance?: string; documentRef?: string; findingCategory?: FindingCategory; pic?: string; dueDate?: string };
 export type Audit = { id: string; supplier: string; date: string; auditor: string; department: string; status: 'Draft' | 'Final'; answers: Answer[]; updatedAt: string; checklistVersion?: number; location?: string; scope?: string; supplierContact?: string };
 export function calculateScore(answers: Answer[]) {
   const applicable = answers.filter(a => /^[0-4]$/.test(a.score));
@@ -85,13 +91,20 @@ export function grade(score: number | null) {
   return score === null ? 'Belum dinilai' : score >= 85 ? 'A — Memenuhi' : score >= 70 ? 'B — Perlu perbaikan' : 'C — Perlu tindakan koreksi';
 }
 export function createAnswers(department: string): Answer[] {
-  return CHECKLISTS[department].map(item => ({ ...item, score: '', evidence: '', action: '', pic: '', dueDate: '' }));
+  return CHECKLISTS[department].map(item => ({ ...item, score: '', evidence: '', documentRef: '', findingCategory: '', finding: '', action: '', pic: '', dueDate: '' }));
 }
 export function canFinalize(audit: Audit) {
   if (!audit.supplier.trim() || !audit.date || !audit.answers.length || calculateScore(audit.answers) === null) return false;
-  if (audit.checklistVersion === 2 && !(audit.location?.trim() && audit.scope?.trim() && audit.supplierContact?.trim())) return false;
+  if ((audit.checklistVersion ?? 0) >= 2 && !(audit.location?.trim() && audit.scope?.trim() && audit.supplierContact?.trim())) return false;
   return audit.answers.every(answer => {
     if (!(answer.score === 'NA' || /^[0-4]$/.test(answer.score)) || !answer.evidence.trim()) return false;
+    if ((audit.checklistVersion ?? 0) >= 3 && !answer.findingCategory) return false;
+    if ((audit.checklistVersion ?? 0) >= 3 && answer.score === 'NA' && answer.findingCategory !== 'CONFORMITY') return false;
+    if ((audit.checklistVersion ?? 0) >= 3 && answer.findingCategory !== 'CONFORMITY' && !answer.finding?.trim()) return false;
+    if (answer.findingCategory === 'MINOR' || answer.findingCategory === 'MAJOR') {
+      if (!answer.action.trim()) return false;
+      return audit.checklistVersion !== 3 || Boolean(answer.pic?.trim() && answer.dueDate && answer.dueDate >= audit.date);
+    }
     if (answer.score === 'NA' || Number(answer.score) >= 3) return true;
     if (!answer.action.trim()) return false;
     return audit.checklistVersion !== 2 || Boolean(answer.pic?.trim() && answer.dueDate && answer.dueDate >= audit.date);
