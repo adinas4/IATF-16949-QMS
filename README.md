@@ -89,3 +89,11 @@ npm run preview
 ### Form checklist departemen
 
 Menu Audit Supplier memuat 105 pertanyaan dari 15 area audit pada `Check and Finding Sheet Audit Supplier PT MRP Certified`, lalu membagikannya ke 11 departemen terkait. Setiap item menyimpan bukti objektif yang diharapkan, nomor dokumen atau referensi observasi, bukti aktual, uraian temuan, kategori hasil (Conformity, Observation, OFI, Minor, atau Major), nilai, tindakan koreksi, PIC, dan target penyelesaian. Audit baru memakai checklist departemen pengguna; audit lama tetap memakai snapshot checklist aslinya.
+
+### Deployment Cloudflare
+
+- Produksi Cloudflare tersedia di `https://audit.appmsks-mrp.com` melalui Worker Static Assets.
+- Jawaban audit disimpan terpusat di D1 `iatf-supplier-audits`; `localStorage` tetap digunakan sebagai cache dan fallback draft ketika koneksi gagal.
+- Endpoint API dilindungi cookie sesi 12 jam yang diterbitkan setelah kode akses perusahaan diverifikasi. Nilai kode disimpan sebagai Worker secret `ACCESS_CODE` dan tidak dimasukkan ke repository.
+- Konfigurasi Worker ada di `wrangler.jsonc`, API di `worker/index.ts`, dan skema database di `migrations/0001_supplier_audits.sql`.
+- R2 belum diaktifkan pada akun Cloudflare. Karena itu foto/PDF belum dapat diunggah; bukti aktual dan referensi dokumen sudah tersimpan di D1.

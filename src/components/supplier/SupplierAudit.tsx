@@ -17,6 +17,28 @@ export function SupplierAudit({ identity }: { identity: Identity }) {
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState(loaded.error);
   const [dirty, setDirty] = useState(false);
+  const [storageStatus, setStorageStatus] = useState('Menghubungkan penyimpanan online...');
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/audits', { headers: { accept: 'application/json' } })
+      .then(async response => {
+        if (response.status === 401) {
+          sessionStorage.removeItem('iatf:identity');
+          window.location.reload();
+          throw new Error('Sesi berakhir.');
+        }
+        if (!response.ok) throw new Error('API penyimpanan tidak tersedia.');
+        const cloudAudits = await response.json() as Audit[];
+        if (!Array.isArray(cloudAudits)) throw new Error('Respons penyimpanan tidak valid.');
+        if (!active) return;
+        const merged = [...cloudAudits, ...loaded.audits.filter(local => !cloudAudits.some(cloud => cloud.id === local.id))];
+        setAudits(merged);
+        localStorage.setItem(KEY, JSON.stringify(merged));
+        setStorageStatus('Online - Cloudflare D1');
+      })
+      .catch(() => { if (active) setStorageStatus('Offline - menggunakan penyimpanan browser'); });
+    return () => { active = false; };
+  }, [loaded.audits]);
   React.useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', warn);
@@ -27,19 +49,38 @@ export function SupplierAudit({ identity }: { identity: Identity }) {
     setDraft(next); setDirty(false); setMessage(loaded.error);
   };
   const change = (next: Audit) => { setDraft(next); setDirty(true); };
-  const save = (final: boolean) => {
+  const save = async (final: boolean) => {
     if (!draft || loaded.error) return;
     if (!draft.supplier.trim() || !draft.date) { setMessage('Isi nama supplier dan tanggal audit.'); return; }
     if (final && !canFinalize(draft)) { setMessage('Lengkapi identitas audit, nilai, bukti aktual, dan kategori hasil. Observation, OFI, Minor, dan Major wajib memuat uraian temuan. Minor dan Major juga wajib memiliki tindakan koreksi, PIC, dan target penyelesaian.'); return; }
-    const saved: Audit = { ...draft, supplier: draft.supplier.trim(), status: final ? 'Final' : 'Draft', updatedAt: new Date().toISOString() };
+    let saved: Audit = { ...draft, supplier: draft.supplier.trim(), status: final ? 'Final' : 'Draft', updatedAt: new Date().toISOString() };
     try {
+      const response = await fetch(`/api/audits/${encodeURIComponent(saved.id)}`, {
+        method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(saved),
+      });
+      const result = await response.json() as Audit & { error?: string };
+      if (response.status === 401) {
+        sessionStorage.removeItem('iatf:identity');
+        window.location.reload();
+        return;
+      }
+      if (!response.ok) throw new Error(result.error || 'Gagal menyimpan ke penyimpanan online.');
+      saved = result;
       const latest = readAudits();
-      const existing = latest.find(a => a.id === saved.id);
-      if (existing && (existing.status === 'Final' || existing.updatedAt !== draft.updatedAt)) throw new Error('Audit telah berubah di tab lain. Buka ulang halaman sebelum mengedit.');
       const next = [saved, ...latest.filter(a => a.id !== saved.id)];
       localStorage.setItem(KEY, JSON.stringify(next)); setAudits(next); setDraft(saved); setDirty(false);
-      setMessage(final ? 'Audit difinalisasi. Hasil akhir tersimpan.' : 'Draft tersimpan.');
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'Gagal menyimpan audit.'); }
+      setStorageStatus('Online - Cloudflare D1');
+      setMessage(final ? 'Audit difinalisasi dan tersimpan online.' : 'Draft tersimpan online.');
+    } catch (error) {
+      if (final) { setMessage(error instanceof Error ? error.message : 'Finalisasi gagal disimpan online.'); return; }
+      try {
+        const latest = readAudits();
+        const next = [saved, ...latest.filter(a => a.id !== saved.id)];
+        localStorage.setItem(KEY, JSON.stringify(next)); setAudits(next); setDraft(saved); setDirty(false);
+        setStorageStatus('Offline - menggunakan penyimpanan browser');
+        setMessage('Koneksi online gagal. Draft diamankan di browser ini dan perlu disimpan ulang saat online.');
+      } catch { setMessage('Draft tidak dapat disimpan.'); }
+    }
   };
   const visible = audits.filter(a => (filter === 'ALL' || a.department === filter) && a.supplier.toLowerCase().includes(search.toLowerCase()));
   const finalAudits = visible.filter(a => a.status === 'Final');
@@ -47,7 +88,7 @@ export function SupplierAudit({ identity }: { identity: Identity }) {
   const editable = draft?.status === 'Draft' && draft.auditor === identity.name && draft.department === identity.department;
   return <section className="space-y-6">
     <div className="flex flex-wrap justify-between gap-4"><div><h2 className="text-2xl font-bold">Audit Supplier</h2><p className="text-slate-500">Checklist, bukti objektif, temuan, dan tindak lanjut per departemen.</p></div><button className={button} onClick={() => switchDraft({ id: crypto.randomUUID(), supplier: '', date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10), auditor: identity.name, department: identity.department, status: 'Draft', answers: createAnswers(identity.department), checklistVersion: 3, location: '', scope: '', supplierContact: '', updatedAt: '' })}>+ Audit baru</button></div>
-    <p className="text-xs text-slate-500">Checklist mengacu pada Check and Finding Sheet Audit Supplier PT MRP Certified. Data audit saat ini disimpan di browser ini.</p>
+    <p className="text-xs text-slate-500">Checklist mengacu pada Check and Finding Sheet Audit Supplier PT MRP Certified. <span className="font-semibold">Penyimpanan: {storageStatus}</span></p>
     <div className="rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5 space-y-4">
       <div><h3 className="text-lg font-bold">Form &amp; checklist per departemen</h3><p className="text-sm text-slate-500">Tersedia 105 pertanyaan dalam 15 area audit. Audit baru membuka bagian yang menjadi tanggung jawab departemen login Anda: {identity.department}.</p></div>
       <label className="block">Pratinjau checklist<select className={field} value={previewDepartment} onChange={e => setPreviewDepartment(e.target.value)}>{DEPARTMENTS.map(d => <option key={d}>{d}</option>)}</select></label>

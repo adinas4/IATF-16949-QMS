@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "iatf-supplier-audit",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-09",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "iatf-supplier-audits",
+      "database_id": "95514745-ee88-41b8-aa2b-9db736fa1279",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "audit.appmsks-mrp.com",
+      "custom_domain": true
+    }
+  ]
+}
