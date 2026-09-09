@@ -1,4 +1,4 @@
-interface Organization { id: string; name: string; code_salt: string; code_hash: string }
+interface Organization { id: string; name: string; code_salt: string; code_hash: string; settings_code_salt?: string; settings_code_hash?: string }
 interface Session { organizationId: string; expires: number }
 interface AuditPayload {
   id: string;
@@ -43,6 +43,17 @@ function fromBase64Url(value: string) {
 async function deriveAccessCodeHash(accessCode: string, salt: string) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(accessCode), 'PBKDF2', false, ['deriveBits']);
   return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: hexToBytes(salt), iterations: 100_000 }, key, 256));
+}
+
+const bytesToHex = (value: Uint8Array) => Array.from(value, byte => byte.toString(16).padStart(2, '0')).join('');
+
+async function validSettingsCode(env: Env, organizationId: string, suppliedCode: string) {
+  const organization = await env.DB.prepare('SELECT settings_code_salt, settings_code_hash FROM organizations WHERE id = ? AND active = 1')
+    .bind(organizationId).first<Organization>();
+  if (!organization?.settings_code_salt || !organization.settings_code_hash || !suppliedCode) return false;
+  const suppliedHash = await deriveAccessCodeHash(suppliedCode, organization.settings_code_salt);
+  const expectedHash = hexToBytes(organization.settings_code_hash);
+  return suppliedHash.length === expectedHash.length && crypto.subtle.timingSafeEqual(suppliedHash, expectedHash);
 }
 
 async function sessionKey(secret: string) {
@@ -107,6 +118,61 @@ export default {
         const result = await env.DB.prepare('SELECT payload FROM supplier_audits WHERE organization_id = ? ORDER BY updated_at DESC LIMIT 500')
           .bind(session.organizationId).all<{ payload: string }>();
         return json(result.results.map(row => JSON.parse(row.payload)));
+      }
+
+      if (request.method === 'GET' && url.pathname === '/api/suppliers') {
+        const result = await env.DB.prepare(`SELECT id, code, name, address, contact, email, phone, scope, active,
+          created_at AS createdAt, updated_at AS updatedAt FROM suppliers WHERE organization_id = ? ORDER BY active DESC, name COLLATE NOCASE`)
+          .bind(session.organizationId).all();
+        return json(result.results.map(row => ({ ...row, active: Boolean(row.active) })));
+      }
+
+      if (request.method === 'POST' && url.pathname === '/api/suppliers') {
+        const supplier = await request.json<Record<string, unknown>>();
+        if (typeof supplier.id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(supplier.id) ||
+          typeof supplier.code !== 'string' || !supplier.code.trim() || supplier.code.length > 50 ||
+          typeof supplier.name !== 'string' || !supplier.name.trim() || supplier.name.length > 160) {
+          return json({ error: 'Kode dan nama supplier wajib diisi.' }, 400);
+        }
+        const values = ['address', 'contact', 'email', 'phone', 'scope'].map(key => typeof supplier[key] === 'string' ? supplier[key].toString().trim() : '');
+        if (values.some(value => value.length > 500)) return json({ error: 'Data supplier terlalu panjang.' }, 400);
+        const now = new Date().toISOString();
+        try {
+          await env.DB.prepare(`INSERT INTO suppliers (id, organization_id, code, name, address, contact, email, phone, scope, active, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET code=excluded.code, name=excluded.name, address=excluded.address, contact=excluded.contact,
+            email=excluded.email, phone=excluded.phone, scope=excluded.scope, active=excluded.active, updated_at=excluded.updated_at
+            WHERE suppliers.organization_id=excluded.organization_id`)
+            .bind(supplier.id, session.organizationId, supplier.code.trim(), supplier.name.trim(), ...values, supplier.active === false ? 0 : 1, now, now).run();
+        } catch (error) {
+          if (error instanceof Error && error.message.includes('UNIQUE')) return json({ error: 'Kode atau nama supplier sudah terdaftar.' }, 409);
+          throw error;
+        }
+        return json({ ...supplier, code: supplier.code.trim(), name: supplier.name.trim(), address: values[0], contact: values[1], email: values[2], phone: values[3], scope: values[4], active: supplier.active !== false, updatedAt: now });
+      }
+
+      if (request.method === 'PUT' && url.pathname === '/api/company/access-code') {
+        const body = await request.json<{ settingsCode?: string; newAccessCode?: string }>();
+        if (!(await validSettingsCode(env, session.organizationId, body.settingsCode ?? ''))) return json({ error: 'Kode pengaturan perusahaan salah.' }, 403);
+        const newAccessCode = body.newAccessCode?.trim() ?? '';
+        if (newAccessCode.length < 10 || newAccessCode.length > 200) return json({ error: 'Kode akses baru minimal 10 karakter.' }, 400);
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const hash = await deriveAccessCodeHash(newAccessCode, bytesToHex(salt));
+        await env.DB.prepare('UPDATE organizations SET code_salt = ?, code_hash = ? WHERE id = ?')
+          .bind(bytesToHex(salt), bytesToHex(hash), session.organizationId).run();
+        return json({ ok: true });
+      }
+
+      if (request.method === 'PUT' && url.pathname === '/api/company/settings-code') {
+        const body = await request.json<{ settingsCode?: string; newSettingsCode?: string }>();
+        if (!(await validSettingsCode(env, session.organizationId, body.settingsCode ?? ''))) return json({ error: 'Kode pengaturan perusahaan salah.' }, 403);
+        const newSettingsCode = body.newSettingsCode?.trim() ?? '';
+        if (newSettingsCode.length < 12 || newSettingsCode.length > 200) return json({ error: 'Kode pengaturan baru minimal 12 karakter.' }, 400);
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const hash = await deriveAccessCodeHash(newSettingsCode, bytesToHex(salt));
+        await env.DB.prepare('UPDATE organizations SET settings_code_salt = ?, settings_code_hash = ? WHERE id = ?')
+          .bind(bytesToHex(salt), bytesToHex(hash), session.organizationId).run();
+        return json({ ok: true });
       }
 
       const match = url.pathname.match(/^\/api\/audits\/([a-zA-Z0-9-]+)$/);

@@ -1,7 +1,24 @@
 import { CERTIFIED_SUPPLIER_CHECKLIST } from './certifiedChecklist.ts';
 
 export type FindingCategory = '' | 'CONFORMITY' | 'OBSERVATION' | 'OFI' | 'MINOR' | 'MAJOR';
-export type ChecklistItem = { id?: string; category?: string; question: string; guidance: string };
+export type ChecklistItem = { id?: string; category?: string; question: string; guidance: string; clauses?: string[] };
+const CLAUSES_BY_CATEGORY: Record<string, string[]> = {
+  'Organisasi, QMS & Manajemen': ['4.1', '4.4', '5.1.1', '7.5', '9.2', '9.3'],
+  'Pemecahan Masalah & Tindakan Koreksi': ['10.2', '10.2.3', '10.2.4', '10.2.6'],
+  'Pengendalian Mutu & Inspeksi': ['8.5.1', '8.6', '9.1.1.1'],
+  'Kalibrasi & Metrologi': ['7.1.5', '7.1.5.1.1', '7.1.5.2', '7.1.5.3'],
+  'Produk Tidak Sesuai': ['8.7', '8.7.1.1', '8.7.1.3'],
+  'Engineering, Proyek Baru & Manajemen Perubahan': ['8.3', '8.3.2.1', '8.3.5.2', '8.5.6.1'],
+  'Pengendalian Proses Produksi': ['8.5.1.1', '8.5.1.2', '8.5.1.3'],
+  'Pengerjaan Ulang & Perbaikan': ['8.7.1.4', '8.7.1.5'],
+  'Ketertelusuran': ['8.5.2', '8.5.2.1'],
+  'Perencanaan Produksi': ['8.1', '8.5.1.7'],
+  'Manajemen Supplier': ['8.4', '8.4.1.2', '8.4.2.4', '8.4.2.4.1'],
+  'Gudang, Logistik & Pengiriman': ['8.5.4', '8.5.4.1', '8.6.1'],
+  'Pemeliharaan Mesin & Tooling': ['7.1.3.1', '8.5.1.5', '8.5.1.6'],
+  'Sumber Daya Manusia & Kompetensi': ['7.2', '7.2.1', '7.2.2', '7.3.1'],
+  'Keselamatan dan Kesehatan Kerja': ['7.1.4', '7.1.4.1', '8.5.1.2'],
+};
 const LEGACY_CHECKLISTS: Record<string, ChecklistItem[]> = {
   'Quality Assurance': [
     { question: 'Apakah dokumen mutu yang digunakan merupakan revisi terkini?', guidance: 'Periksa master list, persetujuan revisi, dan dokumen di area kerja.' },
@@ -78,10 +95,13 @@ const LEGACY_CHECKLISTS: Record<string, ChecklistItem[]> = {
 };
 // The certified supplier workbook is the controlled source for new audits.
 // Keep the earlier templates available so saved audit snapshots remain readable.
-export const CHECKLISTS: Record<string, ChecklistItem[]> = CERTIFIED_SUPPLIER_CHECKLIST;
+export const CHECKLISTS: Record<string, ChecklistItem[]> = Object.fromEntries(
+  Object.entries(CERTIFIED_SUPPLIER_CHECKLIST).map(([department, items]) => [department, items.map(item => ({ ...item, clauses: CLAUSES_BY_CATEGORY[item.category] || [] }))]),
+);
 export const DEPARTMENTS = Object.keys(CHECKLISTS);
 export type Identity = { name: string; department: string; companyId?: string; companyName?: string };
-export type Answer = { id?: string; category?: string; question: string; score: string; evidence: string; finding?: string; action: string; guidance?: string; documentRef?: string; findingCategory?: FindingCategory; pic?: string; dueDate?: string };
+export type Answer = { id?: string; category?: string; clauses?: string[]; question: string; score: string; evidence: string; finding?: string; action: string; guidance?: string; documentRef?: string; findingCategory?: FindingCategory; pic?: string; dueDate?: string };
+export type Supplier = { id: string; code: string; name: string; address: string; contact: string; email: string; phone: string; scope: string; active: boolean; createdAt?: string; updatedAt?: string };
 export type Audit = { id: string; supplier: string; date: string; auditor: string; department: string; companyId?: string; companyName?: string; status: 'Draft' | 'Final'; answers: Answer[]; updatedAt: string; checklistVersion?: number; location?: string; scope?: string; supplierContact?: string };
 export function calculateScore(answers: Answer[]) {
   const applicable = answers.filter(a => /^[0-4]$/.test(a.score));
