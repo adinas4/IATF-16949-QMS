@@ -3,13 +3,14 @@ import { Audit, CHECKLISTS, DEPARTMENTS, Identity, calculateScore, canFinalize, 
 const KEY = 'iatf:supplier-audits:v1';
 const field = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-2';
 const button = 'rounded-lg bg-indigo-600 text-white px-4 py-2 disabled:opacity-40';
-function readAudits(): Audit[] {
-  const value = JSON.parse(localStorage.getItem(KEY) || '[]');
+function readAudits(storageKey = KEY): Audit[] {
+  const value = JSON.parse(localStorage.getItem(storageKey) || '[]');
   if (!Array.isArray(value) || value.some(a => !a || typeof a.id !== 'string' || typeof a.supplier !== 'string' || !DEPARTMENTS.includes(a.department) || !Array.isArray(a.answers) || !a.answers.every(x => x && ['question', 'score', 'evidence', 'action'].every(k => typeof x[k] === 'string')))) throw new Error('Data audit tersimpan tidak dapat dibaca.');
   return value;
 }
 export function SupplierAudit({ identity }: { identity: Identity }) {
-  const [loaded] = useState(() => { try { return { audits: readAudits(), error: '' }; } catch { return { audits: [] as Audit[], error: 'Data lokal tidak dapat dibaca. Penyimpanan diblokir agar data lama tidak tertimpa.' }; } });
+  const storageKey = identity.companyId ? `${KEY}:${identity.companyId}` : KEY;
+  const [loaded] = useState(() => { try { return { audits: readAudits(storageKey), error: '' }; } catch { return { audits: [] as Audit[], error: 'Data lokal tidak dapat dibaca. Penyimpanan diblokir agar data lama tidak tertimpa.' }; } });
   const [audits, setAudits] = useState(loaded.audits);
   const [draft, setDraft] = useState<Audit | null>(null);
   const [previewDepartment, setPreviewDepartment] = useState(identity.department);
@@ -33,12 +34,12 @@ export function SupplierAudit({ identity }: { identity: Identity }) {
         if (!active) return;
         const merged = [...cloudAudits, ...loaded.audits.filter(local => !cloudAudits.some(cloud => cloud.id === local.id))];
         setAudits(merged);
-        localStorage.setItem(KEY, JSON.stringify(merged));
+        localStorage.setItem(storageKey, JSON.stringify(merged));
         setStorageStatus('Online - Cloudflare D1');
       })
       .catch(() => { if (active) setStorageStatus('Offline - menggunakan penyimpanan browser'); });
     return () => { active = false; };
-  }, [loaded.audits]);
+  }, [loaded.audits, storageKey]);
   React.useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', warn);
@@ -66,17 +67,17 @@ export function SupplierAudit({ identity }: { identity: Identity }) {
       }
       if (!response.ok) throw new Error(result.error || 'Gagal menyimpan ke penyimpanan online.');
       saved = result;
-      const latest = readAudits();
+      const latest = readAudits(storageKey);
       const next = [saved, ...latest.filter(a => a.id !== saved.id)];
-      localStorage.setItem(KEY, JSON.stringify(next)); setAudits(next); setDraft(saved); setDirty(false);
+      localStorage.setItem(storageKey, JSON.stringify(next)); setAudits(next); setDraft(saved); setDirty(false);
       setStorageStatus('Online - Cloudflare D1');
       setMessage(final ? 'Audit difinalisasi dan tersimpan online.' : 'Draft tersimpan online.');
     } catch (error) {
       if (final) { setMessage(error instanceof Error ? error.message : 'Finalisasi gagal disimpan online.'); return; }
       try {
-        const latest = readAudits();
+        const latest = readAudits(storageKey);
         const next = [saved, ...latest.filter(a => a.id !== saved.id)];
-        localStorage.setItem(KEY, JSON.stringify(next)); setAudits(next); setDraft(saved); setDirty(false);
+        localStorage.setItem(storageKey, JSON.stringify(next)); setAudits(next); setDraft(saved); setDirty(false);
         setStorageStatus('Offline - menggunakan penyimpanan browser');
         setMessage('Koneksi online gagal. Draft diamankan di browser ini dan perlu disimpan ulang saat online.');
       } catch { setMessage('Draft tidak dapat disimpan.'); }

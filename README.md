@@ -94,6 +94,7 @@ Menu Audit Supplier memuat 105 pertanyaan dari 15 area audit pada `Check and Fin
 
 - Produksi Cloudflare tersedia di `https://audit.appmsks-mrp.com` melalui Worker Static Assets.
 - Jawaban audit disimpan terpusat di D1 `iatf-supplier-audits`; `localStorage` tetap digunakan sebagai cache dan fallback draft ketika koneksi gagal.
-- Endpoint API dilindungi cookie sesi 12 jam yang diterbitkan setelah kode akses perusahaan diverifikasi. Nilai kode disimpan sebagai Worker secret `ACCESS_CODE` dan tidak dimasukkan ke repository.
+- Hanya perusahaan aktif yang terdaftar di tabel D1 `organizations` dan memiliki kode akses yang cocok yang dapat masuk. Kode disimpan sebagai PBKDF2 hash dengan salt, bukan teks asli.
+- Cookie sesi 12 jam ditandatangani Worker secret `SESSION_SECRET`, memuat identitas perusahaan, dan membatasi seluruh query audit ke perusahaan tersebut. Cache browser juga dipisahkan per perusahaan.
 - Konfigurasi Worker ada di `wrangler.jsonc`, API di `worker/index.ts`, dan skema database di `migrations/0001_supplier_audits.sql`.
 - R2 belum diaktifkan pada akun Cloudflare. Karena itu foto/PDF belum dapat diunggah; bukti aktual dan referensi dokumen sudah tersimpan di D1.

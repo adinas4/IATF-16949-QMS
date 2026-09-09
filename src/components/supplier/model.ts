@@ -80,9 +80,9 @@ const LEGACY_CHECKLISTS: Record<string, ChecklistItem[]> = {
 // Keep the earlier templates available so saved audit snapshots remain readable.
 export const CHECKLISTS: Record<string, ChecklistItem[]> = CERTIFIED_SUPPLIER_CHECKLIST;
 export const DEPARTMENTS = Object.keys(CHECKLISTS);
-export type Identity = { name: string; department: string };
+export type Identity = { name: string; department: string; companyId?: string; companyName?: string };
 export type Answer = { id?: string; category?: string; question: string; score: string; evidence: string; finding?: string; action: string; guidance?: string; documentRef?: string; findingCategory?: FindingCategory; pic?: string; dueDate?: string };
-export type Audit = { id: string; supplier: string; date: string; auditor: string; department: string; status: 'Draft' | 'Final'; answers: Answer[]; updatedAt: string; checklistVersion?: number; location?: string; scope?: string; supplierContact?: string };
+export type Audit = { id: string; supplier: string; date: string; auditor: string; department: string; companyId?: string; companyName?: string; status: 'Draft' | 'Final'; answers: Answer[]; updatedAt: string; checklistVersion?: number; location?: string; scope?: string; supplierContact?: string };
 export function calculateScore(answers: Answer[]) {
   const applicable = answers.filter(a => /^[0-4]$/.test(a.score));
   return applicable.length ? Math.round(applicable.reduce((sum, a) => sum + Number(a.score), 0) / (applicable.length * 4) * 100) : null;

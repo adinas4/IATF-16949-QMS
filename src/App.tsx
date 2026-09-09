@@ -679,7 +679,7 @@ function DocumentControlApp({ identity, onLogout }) {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs"><span>{identity.name}<br />{identity.department}</span><button className="border rounded-lg px-3 py-2" onClick={onLogout}>Keluar</button></div>
+            <div className="flex items-center gap-2 text-xs"><span>{identity.name}<br />{identity.department}{identity.companyName && <> · {identity.companyName}</>}</span><button className="border rounded-lg px-3 py-2" onClick={onLogout}>Keluar</button></div>
             {/* Role Switcher & Dark Mode Toggle */}
             <div className="flex items-center gap-3">
               <div className="hidden md:flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-700">
@@ -1670,8 +1670,11 @@ function DocumentControlApp({ identity, onLogout }) {
 
 export default function App() {
   const [identity, setIdentity] = useState(readIdentity);
-  const logout = () => {
+  const logout = async () => {
     if (!window.confirm('Keluar dari sesi? Pastikan draft audit sudah disimpan.')) return;
+    if (window.location.hostname === 'audit.appmsks-mrp.com') {
+      try { await fetch('/api/session', { method: 'DELETE' }); } catch { /* Sesi browser tetap dibersihkan. */ }
+    }
     sessionStorage.removeItem('iatf:identity');
     setIdentity(null);
   };
