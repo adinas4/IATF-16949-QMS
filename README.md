@@ -85,3 +85,7 @@ npm run preview
 - Rekap supplier memakai rata-rata skor final terbaru per departemen berdasarkan tanggal audit, kemudian waktu finalisasi. Departemen yang belum mengaudit tidak dihitung. Filter departemen juga berlaku untuk rekap.
 - Audit supplier disimpan khusus di localStorage (`iatf:supplier-audits:v1`), belum disinkronkan ke Firestore atau perangkat lain. Jangan hapus data browser jika masih diperlukan.
 - Uji logika skor dan finalisasi dengan Node.js 24: `node --test tests/supplier-audit.test.mjs`.
+
+### Form checklist departemen
+
+Menu Audit Supplier menampilkan pratinjau 6 pertanyaan dan panduan bukti untuk setiap departemen (54 pertanyaan total). Audit baru memakai checklist departemen pengguna. Form mencatat lokasi, produk/proses, dan PIC supplier; temuan bernilai 0-2 memerlukan tindakan koreksi, PIC, dan target penyelesaian. Audit lama tetap memakai snapshot checklist aslinya. Progres penilaian menunjukkan jumlah item yang sudah diberi nilai, sementara finalisasi juga memvalidasi bukti dan kelengkapan form.

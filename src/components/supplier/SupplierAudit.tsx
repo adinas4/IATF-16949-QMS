@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Audit, CHECKLISTS, DEPARTMENTS, Identity, calculateScore, canFinalize, grade } from './model';
+import { Audit, CHECKLISTS, DEPARTMENTS, Identity, calculateScore, canFinalize, grade, createAnswers } from './model';
 const KEY = 'iatf:supplier-audits:v1';
 const field = 'w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 p-2';
 const button = 'rounded-lg bg-indigo-600 text-white px-4 py-2 disabled:opacity-40';
@@ -12,6 +12,7 @@ export function SupplierAudit({ identity }: { identity: Identity }) {
   const [loaded] = useState(() => { try { return { audits: readAudits(), error: '' }; } catch { return { audits: [] as Audit[], error: 'Data lokal tidak dapat dibaca. Penyimpanan diblokir agar data lama tidak tertimpa.' }; } });
   const [audits, setAudits] = useState(loaded.audits);
   const [draft, setDraft] = useState<Audit | null>(null);
+  const [previewDepartment, setPreviewDepartment] = useState(identity.department);
   const [filter, setFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [message, setMessage] = useState(loaded.error);
@@ -45,21 +46,30 @@ export function SupplierAudit({ identity }: { identity: Identity }) {
   const suppliers = [...new Set(finalAudits.map(a => a.supplier.toLowerCase()))];
   const editable = draft?.status === 'Draft' && draft.auditor === identity.name && draft.department === identity.department;
   return <section className="space-y-6">
-    <div className="flex flex-wrap justify-between gap-4"><div><h2 className="text-2xl font-bold">Audit Supplier</h2><p className="text-slate-500">Checklist departemen, temuan, dan hasil penilaian supplier.</p></div><button className={button} onClick={() => switchDraft({ id: crypto.randomUUID(), supplier: '', date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10), auditor: identity.name, department: identity.department, status: 'Draft', answers: CHECKLISTS[identity.department].map(question => ({ question, score: '', evidence: '', action: '' })), updatedAt: '' })}>+ Audit baru</button></div>
+    <div className="flex flex-wrap justify-between gap-4"><div><h2 className="text-2xl font-bold">Audit Supplier</h2><p className="text-slate-500">Checklist departemen, temuan, dan hasil penilaian supplier.</p></div><button className={button} onClick={() => switchDraft({ id: crypto.randomUUID(), supplier: '', date: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10), auditor: identity.name, department: identity.department, status: 'Draft', answers: createAnswers(identity.department), checklistVersion: 2, location: '', scope: '', supplierContact: '', updatedAt: '' })}>+ Audit baru</button></div>
     <p className="text-xs text-slate-500">Data audit disimpan di browser ini. Checklist dan batas nilai merupakan template internal yang dapat disesuaikan, bukan sertifikasi IATF.</p>
+    <div className="rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5 space-y-4">
+      <div><h3 className="text-lg font-bold">Form &amp; checklist per departemen</h3><p className="text-sm text-slate-500">Lihat panduan semua departemen di sini. Tombol Audit baru membuka form untuk departemen login Anda: {identity.department}.</p></div>
+      <label className="block">Pratinjau checklist<select className={field} value={previewDepartment} onChange={e => setPreviewDepartment(e.target.value)}>{DEPARTMENTS.map(d => <option key={d}>{d}</option>)}</select></label>
+      <details key={previewDepartment}><summary className="cursor-pointer font-semibold">Lihat {CHECKLISTS[previewDepartment].length} pertanyaan - {previewDepartment}</summary><ol className="mt-4 space-y-3 list-decimal pl-5">{CHECKLISTS[previewDepartment].map(item => <li key={item.question}><p className="font-medium">{item.question}</p><p className="text-sm text-slate-500">Bukti pemeriksaan: {item.guidance}</p></li>)}</ol></details>
+    </div>
     {message && <p role="status" className="rounded-lg border border-indigo-300 p-3">{message}</p>}
     {draft && <div className="rounded-2xl border dark:border-slate-700 bg-white dark:bg-slate-900 p-5 space-y-5">
       <div className="flex justify-between gap-3"><div><h3 className="text-lg font-bold">{draft.status === 'Final' ? 'Hasil akhir audit' : 'Form audit supplier'}</h3><p className="text-sm text-slate-500">{draft.auditor} · {draft.department} · {draft.status}</p></div><button onClick={() => switchDraft(null)}>Tutup</button></div>
       <div className="grid sm:grid-cols-2 gap-4"><label>Nama supplier<input className={field} maxLength={160} value={draft.supplier} disabled={!editable} onChange={e => change({ ...draft, supplier: e.target.value })} /></label><label>Tanggal audit<input type="date" className={field} value={draft.date} disabled={!editable} onChange={e => change({ ...draft, date: e.target.value })} /></label></div>
+      <div className="grid sm:grid-cols-3 gap-4">{([['location', 'Lokasi / alamat audit'], ['scope', 'Produk / proses yang diaudit'], ['supplierContact', 'Nama auditee / PIC supplier']] as const).map(([key, label]) => <label key={key}>{label}{draft.checklistVersion === 2 ? ' *' : ''}<input className={field} maxLength={250} disabled={!editable} value={draft[key] || ''} onChange={e => change({ ...draft, [key]: e.target.value })} /></label>)}</div>
+      <div><p className="text-sm font-semibold">Progres penilaian: {draft.answers.filter(a => a.score !== '').length} / {draft.answers.length} item</p><progress aria-label="Progres penilaian checklist" className="w-full accent-indigo-600" value={draft.answers.filter(a => a.score !== '').length} max={draft.answers.length} /></div>
       <p className="text-sm text-slate-500">0: tidak diterapkan · 1: kurang · 2: sebagian · 3: memenuhi · 4: sangat baik. N/A dikecualikan dari skor. Isi bukti untuk setiap item, termasuk alasan N/A.</p>
       {draft.answers.map((answer, index) => {
         const update = (key: string, value: string) => change({ ...draft, answers: draft.answers.map((a, i) => i === index ? { ...a, [key]: value } : a) });
         return <fieldset key={index} disabled={!editable} className="border dark:border-slate-700 rounded-xl p-4 space-y-3"><legend className="font-semibold px-2">{index + 1}. {answer.question}</legend>
+          {answer.guidance && <p className="text-sm text-slate-500">Bukti pemeriksaan: {answer.guidance}</p>}
           <label className="block">Nilai<select className={field} value={answer.score} onChange={e => update('score', e.target.value)}><option value="">Belum dinilai</option>{['0', '1', '2', '3', '4', 'NA'].map(v => <option key={v} value={v}>{v === 'NA' ? 'N/A — Tidak berlaku' : v}</option>)}</select></label>
-          <div className="grid sm:grid-cols-2 gap-3"><label>Bukti / temuan / alasan N/A<textarea className={field} maxLength={4000} value={answer.evidence} onChange={e => update('evidence', e.target.value)} /></label><label>Tindakan koreksi (wajib nilai 0–2)<textarea className={field} maxLength={4000} placeholder="Tindakan, PIC, dan target penyelesaian" value={answer.action} onChange={e => update('action', e.target.value)} /></label></div>
+          <div className="grid sm:grid-cols-2 gap-3"><label>Bukti / temuan / alasan N/A<textarea className={field} maxLength={4000} value={answer.evidence} onChange={e => update('evidence', e.target.value)} /></label><label>Tindakan koreksi (wajib nilai 0–2)<textarea className={field} maxLength={4000} placeholder="Jelaskan tindakan koreksi yang harus dilakukan" value={answer.action} onChange={e => update('action', e.target.value)} /></label></div>
+          <div className="grid sm:grid-cols-2 gap-3"><label>PIC tindakan koreksi<input className={field} maxLength={100} value={answer.pic || ''} onChange={e => update('pic', e.target.value)} /></label><label>Target penyelesaian<input type="date" min={draft.date} className={field} value={answer.dueDate || ''} onChange={e => update('dueDate', e.target.value)} /></label></div>
         </fieldset>;
       })}
-      <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950 p-4"><p className="font-bold text-xl">{draft.status === 'Final' ? 'Skor akhir' : 'Skor sementara'}: {calculateScore(draft.answers) ?? '—'} / 100</p><p>{grade(calculateScore(draft.answers))}</p><p className="text-xs mt-2">Skor = jumlah nilai ÷ (jumlah item berlaku × 4) × 100. A =85; B =70; C &lt;70.</p></div>
+      <div className="rounded-xl bg-indigo-50 dark:bg-indigo-950 p-4"><p className="font-bold text-xl">{draft.status === 'Final' ? 'Skor akhir' : 'Skor sementara'}: {calculateScore(draft.answers) ?? '—'} / 100</p><p>{grade(calculateScore(draft.answers))}</p><p className="text-xs mt-2">Skor = jumlah nilai ÷ (jumlah item berlaku × 4) × 100. A minimal 85; B minimal 70; C &lt;70.</p></div>
       {editable && <div className="flex flex-wrap gap-3"><button disabled={!!loaded.error} className={button} onClick={() => save(false)}>Simpan draft</button><button disabled={!!loaded.error || !canFinalize(draft)} className={button} onClick={() => { if (window.confirm('Finalisasi audit? Hasil yang sudah final tidak dapat diedit.')) save(true); }}>Finalisasi audit</button><p className="text-xs text-slate-500 w-full">Finalisasi aktif setelah semua item dan bukti lengkap, minimal satu nilai berlaku, serta tindakan koreksi untuk nilai 0–2 terisi.</p></div>}
     </div>}
     <div className="grid sm:grid-cols-2 gap-3"><label>Cari supplier<input className={field} value={search} onChange={e => setSearch(e.target.value)} placeholder="Nama supplier" /></label><label>Filter departemen<select className={field} value={filter} onChange={e => setFilter(e.target.value)}><option value="ALL">Semua departemen</option>{DEPARTMENTS.map(d => <option key={d}>{d}</option>)}</select></label></div>
@@ -73,4 +83,4 @@ export function SupplierAudit({ identity }: { identity: Identity }) {
     {!visible.length && <p className="border rounded-xl p-6 text-slate-500">Belum ada audit yang sesuai. Buat audit baru untuk memulai penilaian.</p>}
     <div className="grid md:grid-cols-2 gap-4">{visible.map(a => <button key={a.id} onClick={() => switchDraft(a)} className="text-left border dark:border-slate-700 rounded-xl p-4 bg-white dark:bg-slate-900 hover:border-indigo-500"><div className="flex justify-between gap-2"><strong>{a.supplier}</strong><span>{a.status}</span></div><p className="text-sm text-slate-500 mt-2">{a.department} · {a.auditor} · {a.date}</p><p className="mt-2">{a.status === 'Final' ? `Skor akhir: ${calculateScore(a.answers)}/100` : 'Draft — penilaian belum final'}</p></button>)}</div>
   </section>;
-}
+}
